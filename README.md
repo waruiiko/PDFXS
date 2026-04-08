@@ -6,7 +6,7 @@
 
 ## 安装
 
-下载 `PDFXS Setup x.x.x.exe`，运行安装程序，按提示完成安装即可。
+下载 `PDFXS Setup 1.0.0.exe`，运行安装程序，按提示完成安装即可。
 
 ---
 
@@ -123,7 +123,7 @@ npm start
 npm run dist
 ```
 
-打包产物在 `dist/` 目录下：`PDFXS Setup x.x.x.exe`。
+打包产物在 `dist/` 目录下：`PDFXS Setup 1.0.0.exe`。
 
 ---
 
