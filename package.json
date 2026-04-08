@@ -1,0 +1,15 @@
+{
+  "name": "pdfxs",
+  "version": "1.0.0",
+  "description": "轻量级 PDF 阅读器",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^28.3.3"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.2.67"
+  }
+}

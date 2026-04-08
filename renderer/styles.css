@@ -1,0 +1,676 @@
+/* ── Reset ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #1a1a1a;
+  color: #ccc;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  /* user-select: none is applied only to UI chrome, NOT the body,
+     so pdfjs textLayer spans stay selectable without any overrides needed */
+}
+
+/* ── App Layout ───────────────────────────────────────────────────────────── */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* UI chrome — not selectable; PDF content area inherits default (selectable) */
+#toolbar, #search-bar, #tab-bar, #sidebar,
+.tab, .toc-row, .toc-title, .drop-hint,
+button, .ctx-menu, #sig-dialog {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: #252525;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
+#toolbar button {
+  background: #333;
+  border: 1px solid #484848;
+  color: #ccc;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: background .1s, color .1s;
+}
+#toolbar button:hover:not(:disabled) { background: #444; color: #fff; }
+#toolbar button:active:not(:disabled) { background: #3a6ee8; border-color: #5a8ef0; color: #fff; }
+#toolbar button:disabled { opacity: .35; cursor: default; }
+
+.sep {
+  width: 1px; height: 22px;
+  background: #3a3a3a;
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.page-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#page-input {
+  width: 46px;
+  background: #1e1e1e;
+  border: 1px solid #484848;
+  color: #ccc;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
+}
+#page-input:focus { outline: none; border-color: #3a6ee8; }
+#page-input::-webkit-inner-spin-button,
+#page-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+#page-total { color: #666; white-space: nowrap; }
+#zoom-input {
+  width: 56px;
+  background: #1e1e1e;
+  border: 1px solid #484848;
+  color: #ccc;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
+}
+#zoom-input:focus { outline: none; border-color: #3a6ee8; }
+#zoom-input::-webkit-inner-spin-button,
+#zoom-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+/* Highlight swatches */
+.hl-group {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.hl-swatch {
+  width: 18px !important;
+  height: 18px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  border: 2px solid #555 !important;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.hl-swatch.active { border-color: #fff !important; }
+.hl-swatch:hover  { border-color: #ccc !important; }
+
+/* ── Search Bar ───────────────────────────────────────────────────────────── */
+#search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: #1e1e1e;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+}
+
+#search-input {
+  flex: 1;
+  max-width: 300px;
+  background: #2a2a2a;
+  border: 1px solid #484848;
+  color: #ccc;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+#search-input:focus { outline: none; border-color: #3a6ee8; }
+
+#search-bar button {
+  background: #333;
+  border: 1px solid #484848;
+  color: #ccc;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+#search-bar button:hover { background: #444; color: #fff; }
+
+#search-count { color: #666; font-size: 12px; min-width: 100px; }
+#search-close { margin-left: auto; }
+
+/* ── Main (sidebar + content) ─────────────────────────────────────────────── */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+#sidebar {
+  width: 0;
+  overflow: hidden;
+  background: #202020;
+  border-right: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  transition: width .2s ease;
+  flex-shrink: 0;
+}
+#sidebar.open { width: 260px; }
+
+#sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #333;
+  font-size: 13px;
+  font-weight: 600;
+  color: #aaa;
+  flex-shrink: 0;
+}
+#sidebar-header button {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+#sidebar-header button:hover { color: #ccc; background: #333; }
+
+#toc-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.toc-empty { color: #555; font-size: 12px; padding: 12px 16px; }
+
+.toc-item { }
+
+.toc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 12px;
+  cursor: pointer;
+}
+.toc-row:hover { background: #2a2a2a; }
+
+.toc-chevron {
+  font-size: 9px;
+  color: #555;
+  width: 10px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.toc-spacer { width: 10px; flex-shrink: 0; }
+
+.toc-title {
+  font-size: 12px;
+  color: #aaa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.toc-title:hover { color: #ddd; }
+
+.toc-children { padding-left: 14px; }
+
+/* ── Content Area ─────────────────────────────────────────────────────────── */
+#content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Tab Bar ──────────────────────────────────────────────────────────────── */
+#tab-bar {
+  display: flex;
+  align-items: stretch;
+  background: #1e1e1e;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 34px;
+}
+#tab-bar::-webkit-scrollbar { height: 3px; }
+#tab-bar::-webkit-scrollbar-thumb { background: #444; }
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 0 14px;
+  min-width: 120px;
+  max-width: 200px;
+  cursor: pointer;
+  border-right: 1px solid #2a2a2a;
+  background: #1e1e1e;
+  color: #777;
+  font-size: 12px;
+  flex-shrink: 0;
+  transition: background .1s;
+}
+.tab:hover { background: #272727; color: #aaa; }
+.tab.active { background: #1a1a1a; color: #ccc; border-top: 2px solid #3a6ee8; }
+
+.tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-close {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 3px;
+  border-radius: 3px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.tab-close:hover { color: #ccc; background: #3a3a3a; }
+
+/* ── Viewers ──────────────────────────────────────────────────────────────── */
+#viewers {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.viewer-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── PDF Scroll Container ─────────────────────────────────────────────────── */
+.pdf-scroll-container {
+  flex: 1;
+  overflow: auto;
+  background: #1a1a1a;
+}
+
+/* Continuous page stack */
+.pages-container {
+  width: 100%;
+  padding: 24px 0;
+  box-sizing: border-box;
+}
+
+/* Drop hint (empty state) */
+.drop-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 15vh;
+}
+.drop-icon { font-size: 52px; filter: grayscale(1) opacity(.35); pointer-events: none; }
+.drop-hint > p     { font-size: 15px; color: #444; pointer-events: none; }
+.drop-hint > small { font-size: 12px; color: #2e2e2e; pointer-events: none; }
+
+/* Recent files list inside drop hint */
+.recent-list {
+  margin-top: 20px;
+  width: 420px;
+  max-width: 90%;
+}
+.recent-title {
+  font-size: 11px;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 6px;
+  padding-left: 4px;
+}
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background .1s;
+}
+.recent-item:hover { background: #242424; }
+.recent-item:hover .recent-remove { opacity: 1; }
+.recent-name {
+  flex: 1;
+  font-size: 13px;
+  color: #bbb;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-path {
+  font-size: 11px;
+  color: #444;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+  direction: rtl;   /* shows end of path (filename end) when truncated */
+}
+.recent-remove {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: opacity .15s, color .1s;
+}
+.recent-remove:hover { color: #ccc; background: #333; }
+
+body.drag-over::after {
+  content: '松开以打开 PDF';
+  position: fixed;
+  inset: 0;
+  background: rgba(58,110,232,.12);
+  border: 2px dashed #3a6ee8;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #3a6ee8;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* ── Page Wrapper ─────────────────────────────────────────────────────────── */
+.page-wrapper {
+  position: relative;
+  display: block;
+  line-height: 0;
+  box-shadow: 0 4px 32px rgba(0,0,0,.7);
+  margin: 0 auto 20px auto;   /* horizontal centering */
+}
+
+/* ── Highlight SVG Layer — below text layer so selection works ────────────── */
+.hl-layer {
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: visible;
+}
+
+
+/* ── Text Layer ───────────────────────────────────────────────────────────── */
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  text-align: initial;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 3;
+}
+
+.textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.textLayer span[role="img"] {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+.textLayer span.markedContent { top: 0; height: 0; }
+
+/* Subtle selection — text stays readable through it */
+.textLayer ::selection { background: rgba(58, 110, 232, 0.25); }
+
+/* Search highlight mark */
+.textLayer mark.search-mark {
+  background: rgba(255, 165, 0, 0.55);
+  color: transparent;
+  border-radius: 2px;
+}
+
+/* ── Annotation Layer (forms) ─────────────────────────────────────────────── */
+.annotationLayer {
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 4;
+  --scale-factor: 1;
+  pointer-events: none;   /* pass through to text layer by default */
+}
+
+.annotationLayer section {
+  position: absolute;
+}
+
+/* Kill pointer-events on ALL annotation layer descendants by default.
+   Only restore on actual interactive elements (links, form inputs). */
+.annotationLayer * {
+  pointer-events: none;
+}
+
+.annotationLayer .linkAnnotation > a,
+.annotationLayer .buttonWidgetAnnotation.pushButton > a {
+  position: absolute;
+  font-size: 1em;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: all;
+}
+
+.annotationLayer .linkAnnotation > a:hover,
+.annotationLayer .buttonWidgetAnnotation.pushButton > a:hover {
+  background: rgba(255, 255, 0, .2);
+  box-shadow: 0 2px 10px rgba(255,255,0,.5);
+}
+
+.annotationLayer .textWidgetAnnotation input,
+.annotationLayer .textWidgetAnnotation textarea,
+.annotationLayer .choiceWidgetAnnotation select,
+.annotationLayer .buttonWidgetAnnotation.checkBox input,
+.annotationLayer .buttonWidgetAnnotation.radioButton input {
+  background-color: rgba(0, 54, 255, .13);
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  font-size: calc(9px * var(--scale-factor));
+  height: 100%;
+  margin: 0;
+  vertical-align: top;
+  width: 100%;
+  pointer-events: all;
+}
+
+.annotationLayer .textWidgetAnnotation input:focus,
+.annotationLayer .textWidgetAnnotation textarea:focus,
+.annotationLayer .choiceWidgetAnnotation select:focus {
+  background-color: rgba(0, 54, 255, .2);
+  border-color: rgba(0, 54, 255, .5);
+  outline: none;
+}
+
+.annotationLayer .buttonWidgetAnnotation.checkBox input,
+.annotationLayer .buttonWidgetAnnotation.radioButton input {
+  -webkit-appearance: auto;
+  appearance: auto;
+}
+
+.annotationLayer .popupWrapper { position: absolute; }
+.annotationLayer .popup {
+  position: absolute;
+  background: #fffb82;
+  color: #000;
+  padding: 6px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  font-size: 11px;
+  min-width: 100px;
+  max-width: 220px;
+  z-index: 10;
+}
+
+/* ── Signature Layer ──────────────────────────────────────────────────────── */
+.sig-layer {
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 5;
+  pointer-events: none; /* img elements set their own pointer-events */
+}
+
+.sig-layer img {
+  pointer-events: all;
+  cursor: move;
+  user-select: none;
+}
+
+/* Context menu */
+.ctx-menu {
+  position: fixed;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 5px;
+  padding: 4px 0;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  min-width: 120px;
+}
+.ctx-item {
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #ccc;
+  white-space: nowrap;
+}
+.ctx-item:hover { background: #3a3a3a; color: #fff; }
+.ctx-sep { height: 1px; background: #3a3a3a; margin: 3px 0; }
+
+/* ── Signature Modal ──────────────────────────────────────────────────────── */
+#sig-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+#sig-dialog {
+  background: #252525;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 40px rgba(0,0,0,.6);
+}
+
+#sig-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid #333;
+  font-size: 13px;
+  font-weight: 600;
+  color: #bbb;
+}
+#sig-header button {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+#sig-header button:hover { color: #ccc; background: #333; }
+
+#sig-canvas {
+  background: #fff;
+  display: block;
+  cursor: crosshair;
+}
+
+#sig-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #333;
+}
+
+#sig-footer button {
+  background: #333;
+  border: 1px solid #484848;
+  color: #ccc;
+  padding: 5px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+#sig-footer button:hover { background: #444; color: #fff; }
+#sig-footer button.primary { background: #3a6ee8; border-color: #5a8ef0; color: #fff; }
+#sig-footer button.primary:hover { background: #4a7ef8; }
+
+/* ── Night Mode ───────────────────────────────────────────────────────────── */
+/* Invert only the PDF canvas so text becomes white-on-dark.
+   hue-rotate(180deg) cancels the color inversion so images stay natural. */
+body.night-mode .page-wrapper canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+/* Dim highlights slightly in night mode so they don't glare */
+body.night-mode .hl-layer rect {
+  opacity: 0.7;
+}
+/* Active state for the night mode button */
+#night-btn.active {
+  background: #3a6ee8;
+  border-color: #5a8ef0;
+  color: #fff;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar          { width: 8px; height: 8px; }
+::-webkit-scrollbar-track    { background: #1a1a1a; }
+::-webkit-scrollbar-thumb    { background: #383838; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }

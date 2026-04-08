@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDFXS</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ── Toolbar ── -->
+    <div id="toolbar">
+      <button id="toc-toggle"   title="目录 (Ctrl+B)">☰</button>
+      <button id="open-btn"     title="打开 PDF (Ctrl+O)">打开</button>
+      <button id="new-tab-btn"  title="新标签页 (Ctrl+T)">＋</button>
+      <div class="sep"></div>
+      <button id="prev-btn"     disabled title="上一页 (←)">◀</button>
+      <div class="page-nav">
+        <input id="page-input" type="number" min="1" value="1">
+        <span id="page-total">/ 0</span>
+      </div>
+      <button id="next-btn"     disabled title="下一页 (→)">▶</button>
+      <div class="sep"></div>
+      <button id="zoom-out-btn" disabled title="缩小 (Ctrl+-)">−</button>
+      <input  id="zoom-input" value="100%" title="输入缩放比例后按 Enter">
+      <button id="zoom-in-btn"  disabled title="放大 (Ctrl++)">+</button>
+      <button id="zoom-fit-btn" disabled title="适应窗口 (Ctrl+0)">适应</button>
+      <div class="sep"></div>
+      <!-- Highlight color swatches -->
+      <div class="hl-group" title="高亮颜色">
+        <button class="hl-swatch active" data-color="#ffff00" style="background:#ffff00" title="黄色高亮"></button>
+        <button class="hl-swatch" data-color="#90ee90" style="background:#90ee90" title="绿色高亮"></button>
+        <button class="hl-swatch" data-color="#add8e6" style="background:#add8e6" title="蓝色高亮"></button>
+      </div>
+      <button id="highlight-btn" disabled title="高亮选中文字 (Ctrl+H)">高亮</button>
+      <button id="sign-btn"      disabled title="添加签名">签名</button>
+      <button id="search-toggle" title="搜索 (Ctrl+F)">🔍</button>
+      <button id="night-btn"    title="夜间模式 (Ctrl+D)">夜间</button>
+    </div>
+
+    <!-- ── Search bar ── -->
+    <div id="search-bar" style="display:none">
+      <input id="search-input" type="text" placeholder="搜索文字…" autocomplete="off">
+      <button id="search-run"   title="搜索 (Enter)">搜索</button>
+      <button id="search-prev"  title="上一处">↑</button>
+      <button id="search-next"  title="下一处">↓</button>
+      <span   id="search-count"></span>
+      <button id="search-close" title="关闭">✕</button>
+    </div>
+
+    <!-- ── Main ── -->
+    <div id="main">
+
+      <!-- Sidebar / TOC -->
+      <div id="sidebar">
+        <div id="sidebar-header">
+          <span>目录</span>
+          <button id="sidebar-close" title="关闭侧栏">✕</button>
+        </div>
+        <div id="toc-tree"></div>
+      </div>
+
+      <!-- Content: tab bar + viewers -->
+      <div id="content-area">
+        <div id="tab-bar"></div>
+        <div id="viewers"></div>
+      </div>
+
+    </div><!-- /#main -->
+  </div><!-- /#app -->
+
+  <!-- ── Signature Modal ── -->
+  <div id="sig-modal" style="display:none">
+    <div id="sig-dialog">
+      <div id="sig-header">
+        <span>绘制签名</span>
+        <button id="sig-close" title="取消">✕</button>
+      </div>
+      <canvas id="sig-canvas" width="460" height="180"></canvas>
+      <div id="sig-footer">
+        <button id="sig-clear">清除</button>
+        <button id="sig-confirm" class="primary">确认并点击放置</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
