@@ -30,14 +30,19 @@ export class PDFViewer {
   // ── DOM skeleton ───────────────────────────────────────────────────────────
 
   _buildDOM() {
+    // Outer wrapper: position:relative so nav zones can be absolute within it
     this.el = document.createElement('div');
-    this.el.className = 'pdf-scroll-container';
+    this.el.className = 'pdf-viewer-wrapper';
+
+    // Inner scroll container: fills the wrapper, holds all pages
+    this._scrollEl = document.createElement('div');
+    this._scrollEl.className = 'pdf-scroll-container';
 
     this.dropHint = document.createElement('div');
     this.dropHint.className = 'drop-hint';
     this.dropHint.innerHTML = `
       <div class="drop-icon">📄</div>
-      <p>拖入 PDF 文件，或点击"打开"</p>
+      <p>拖入 PDF / EPUB 文件，或点击"打开"</p>
       <small>Ctrl+O · Ctrl+T 新标签页</small>`;
     this._recentEl = document.createElement('div');
     this._recentEl.className = 'recent-list';
@@ -47,11 +52,30 @@ export class PDFViewer {
     this._pagesEl.className = 'pages-container';
     this._pagesEl.style.display = 'none';
 
-    this.el.append(this.dropHint, this._pagesEl);
+    this._scrollEl.append(this.dropHint, this._pagesEl);
+
+    // Click-to-turn corner zones (shown only in reading mode)
+    this._navPrev = document.createElement('div');
+    this._navPrev.className = 'epub-nav-zone epub-nav-prev';
+    this._navPrev.style.display = 'none';
+    this._navPrev.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._jumpPage(this.currentPage - 1);
+    });
+
+    this._navNext = document.createElement('div');
+    this._navNext.className = 'epub-nav-zone epub-nav-next';
+    this._navNext.style.display = 'none';
+    this._navNext.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._jumpPage(this.currentPage + 1);
+    });
+
+    this.el.append(this._scrollEl, this._navPrev, this._navNext);
   }
 
   _attachZoom() {
-    this.el.addEventListener('wheel', async (e) => {
+    this._scrollEl.addEventListener('wheel', async (e) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
       await this.setZoom(this.zoom + (e.deltaY < 0 ? 0.25 : -0.25));
@@ -61,7 +85,7 @@ export class PDFViewer {
   // Suppress background re-renders while user is dragging to select text,
   // which prevents the selection highlight from flickering mid-drag.
   _attachSelectionGuard() {
-    this.el.addEventListener('mousedown', (e) => {
+    this._scrollEl.addEventListener('mousedown', (e) => {
       // Only guard when clicking on the text layer (not scrollbar, buttons etc.)
       if (e.target.closest('.textLayer')) {
         this._selecting = true;
@@ -241,7 +265,7 @@ export class PDFViewer {
           }
         }
       });
-    }, { root: this.el, threshold: [0, 0.1, 0.5, 1] });
+    }, { root: this._scrollEl, threshold: [0, 0.1, 0.5, 1] });
 
     this._layers.forEach(l => this._observer.observe(l.wrapper));
   }
@@ -539,7 +563,7 @@ export class PDFViewer {
     requestAnimationFrame(() => {
       this._setupObserver();
       // Proactively render visible pages
-      const cr = this.el.getBoundingClientRect();
+      const cr = this._scrollEl.getBoundingClientRect();
       this._layers.forEach(l => {
         const wr = l.wrapper.getBoundingClientRect();
         if (wr.bottom > cr.top && wr.top < cr.bottom && !l.rendered && !this._rendering.has(l.pageNum)) {
@@ -554,7 +578,7 @@ export class PDFViewer {
     const page = await this._getPage(this.currentPage);
     const nv   = page.getViewport({ scale: 1.0 });
     // Fit by width (natural for continuous scroll)
-    await this.setZoom((this.el.clientWidth - 48) / nv.width);
+    await this.setZoom((this._scrollEl.clientWidth - 48) / nv.width);
   }
 
   // ── Search ─────────────────────────────────────────────────────────────────
@@ -692,4 +716,18 @@ export class PDFViewer {
   }
 
   get numPages() { return this.pdfDoc?.numPages || 0; }
+
+  // ── Reading Mode (click-to-turn corners) ──────────────────────────────────
+
+  setReadingMode(on) {
+    this._navPrev.style.display = on ? '' : 'none';
+    this._navNext.style.display = on ? '' : 'none';
+  }
+
+  // Instant page jump used by reading-mode nav zones
+  _jumpPage(n) {
+    if (!this.pdfDoc) return;
+    const p = Math.max(1, Math.min(n, this.pdfDoc.numPages));
+    this._layers[p - 1]?.wrapper.scrollIntoView({ behavior: 'instant', block: 'start' });
+  }
 }

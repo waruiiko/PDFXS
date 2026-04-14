@@ -310,9 +310,19 @@ button, .ctx-menu, #sig-dialog {
   flex-direction: column;
 }
 
+/* ── PDF Viewer Wrapper ───────────────────────────────────────────────────── */
+/* Outer wrapper: position:relative so nav-zones can be absolute-positioned
+   within it, at the same level as the scroll container (not inside it). */
+.pdf-viewer-wrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
 /* ── PDF Scroll Container ─────────────────────────────────────────────────── */
 .pdf-scroll-container {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   overflow: auto;
   background: #1a1a1a;
 }
@@ -393,8 +403,75 @@ button, .ctx-menu, #sig-dialog {
 }
 .recent-remove:hover { color: #ccc; background: #333; }
 
+/* ── EPUB Viewer ──────────────────────────────────────────────────────────── */
+/* Paginated mode: epub.js manages all navigation; outer div must not scroll */
+.epub-scroll-container {
+  overflow: hidden;
+  position: relative;
+}
+
+/* epub-container must exactly match the scroll-container size so epub.js
+   can calculate how much content fits per page */
+.epub-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* epub.js injects an iframe — no extra border */
+.epub-container iframe {
+  border: none;
+}
+
+/* ── Click-to-turn corner zones ───────────────────────────────────────────── */
+/* For EPUB: absolutely positioned within .epub-scroll-container (position:relative).
+   For PDF: the viewer attaches a click listener directly on its scroll element. */
+.epub-nav-zone {
+  position: absolute;
+  bottom: 0;
+  height: 12%;
+  width: 7%;
+  z-index: 50;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 24px;
+  transition: background .15s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.epub-nav-zone:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.epub-nav-prev { left: 0;  }
+.epub-nav-next { right: 0; }
+
+/* Arrow indicators — visible only on hover */
+.epub-nav-zone::after {
+  content: '';
+  display: block;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.epub-nav-zone:hover::after {
+  opacity: 1;
+}
+.epub-nav-prev::after {
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  border-right: 14px solid rgba(255, 255, 255, 0.25);
+}
+.epub-nav-next::after {
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  border-left: 14px solid rgba(255, 255, 255, 0.25);
+}
+
+/* ── Drag overlay ─────────────────────────────────────────────────────────── */
 body.drag-over::after {
-  content: '松开以打开 PDF';
+  content: '松开以打开文件';
   position: fixed;
   inset: 0;
   background: rgba(58,110,232,.12);
@@ -663,6 +740,7 @@ body.night-mode .hl-layer rect {
   opacity: 0.7;
 }
 /* Active state for the night mode button */
+#reading-btn.active,
 #night-btn.active {
   background: #3a6ee8;
   border-color: #5a8ef0;

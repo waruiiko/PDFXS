@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PDFXS</title>
   <link rel="stylesheet" href="styles.css">
+  <!-- JSZip (required by epub.js UMD bundle) -->
+  <script src="../node_modules/jszip/dist/jszip.min.js"></script>
+  <!-- epub.js UMD bundle — exposes window.ePub -->
+  <script src="../node_modules/epubjs/dist/epub.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -12,7 +16,7 @@
     <!-- ── Toolbar ── -->
     <div id="toolbar">
       <button id="toc-toggle"   title="目录 (Ctrl+B)">☰</button>
-      <button id="open-btn"     title="打开 PDF (Ctrl+O)">打开</button>
+      <button id="open-btn"     title="打开 PDF / EPUB (Ctrl+O)">打开</button>
       <button id="new-tab-btn"  title="新标签页 (Ctrl+T)">＋</button>
       <div class="sep"></div>
       <button id="prev-btn"     disabled title="上一页 (←)">◀</button>
@@ -35,6 +39,7 @@
       </div>
       <button id="highlight-btn" disabled title="高亮选中文字 (Ctrl+H)">高亮</button>
       <button id="sign-btn"      disabled title="添加签名">签名</button>
+      <button id="reading-btn"   title="阅读模式 — 点击左/右下角翻页">阅读</button>
       <button id="search-toggle" title="搜索 (Ctrl+F)">🔍</button>
       <button id="night-btn"    title="夜间模式 (Ctrl+D)">夜间</button>
     </div>

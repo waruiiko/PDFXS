@@ -1,4 +1,5 @@
-import { PDFViewer } from './viewer.js';
+import { PDFViewer }  from './viewer.js';
+import { EPUBViewer } from './epub-viewer.js';
 
 // ── Tab Manager ────────────────────────────────────────────────────────────
 
@@ -40,6 +41,8 @@ function setActiveTab(id) {
     const on = t.id === id;
     t.tabEl.classList.toggle('active', on);
     t.container.style.display = on ? 'flex' : 'none';
+    // Apply reading mode to active viewer only; disable on all hidden tabs
+    t.viewer.setReadingMode?.(on ? readingMode : false);
   });
   updateUI();
   refreshTOC();
@@ -63,15 +66,29 @@ function closeTab(id) {
 function getActiveTab() { return tabs.find(t => t.id === activeTabId) || null; }
 function getActiveViewer() { return getActiveTab()?.viewer || null; }
 
-// ── Open PDF ───────────────────────────────────────────────────────────────
+// ── Open file (PDF or EPUB) ────────────────────────────────────────────────
 
-async function openPDF(filePath) {
+async function openFile(filePath) {
+  const ext    = filePath.split('.').pop().toLowerCase();
+  const isEpub = ext === 'epub';
+
   let tab = getActiveTab();
   // Reuse current tab only if it has no file open
   if (!tab || tab.viewer.filePath) {
     tab = createTab();
   }
   setActiveTab(tab.id);
+
+  // If the tab's viewer type doesn't match the file type, swap it out
+  const needsSwap = (isEpub && !tab.viewer.isEpub) || (!isEpub && tab.viewer.isEpub);
+  if (needsSwap) {
+    tab.container.removeChild(tab.viewer.el);
+    tab.viewer = isEpub ? new EPUBViewer() : new PDFViewer();
+    tab.viewer._onPageChange = () => { if (tab.viewer === getActiveViewer()) updateUI(); };
+    tab.container.appendChild(tab.viewer.el);
+    if (isEpub && nightMode) tab.viewer.setNightMode(true);
+    tab.viewer.setReadingMode?.(readingMode);
+  }
 
   const name = filePath.split(/[\\/]/).pop();
   tab.tabEl.querySelector('.tab-title').textContent = name;
@@ -81,6 +98,10 @@ async function openPDF(filePath) {
   document.title = `PDFXS — ${name}`;
 
   await tab.viewer.load(filePath);
+
+  // Auto-switch reading mode: ON for EPUB, OFF for PDF
+  if (isEpub && !readingMode) setReadingMode(true);
+  else if (!isEpub && readingMode) setReadingMode(false);
 
   // Update recent files list
   const recent = await window.electronAPI.addRecent(filePath);
@@ -104,9 +125,10 @@ const hlBtn        = document.getElementById('highlight-btn');
 const signBtn      = document.getElementById('sign-btn');
 
 function updateUI() {
-  const v     = getActiveViewer();
-  const on    = !!v?.pdfDoc;
-  const total = v?.numPages || 0;
+  const v      = getActiveViewer();
+  const on     = !!v?.pdfDoc;
+  const total  = v?.numPages || 0;
+  const isEpub = v?.isEpub === true;
 
   pageInput.value         = on ? v.currentPage : '';
   pageInput.max           = total;
@@ -114,13 +136,14 @@ function updateUI() {
   if (document.activeElement !== zoomInputEl)
     zoomInputEl.value = on ? `${Math.round(v.zoom * 100)}%` : '100%';
 
-  prevBtn.disabled    = !on || v.currentPage <= 1;
-  nextBtn.disabled    = !on || v.currentPage >= total;
+  prevBtn.disabled    = !on || (isEpub ? v._atStart : v.currentPage <= 1);
+  nextBtn.disabled    = !on || (isEpub ? v._atEnd   : v.currentPage >= total);
   zoomInBtn.disabled  = !on;
   zoomOutBtn.disabled = !on;
   zoomFitBtn.disabled = !on;
-  hlBtn.disabled      = !on;
-  signBtn.disabled    = !on;
+  // Highlight and signature are PDF-only features
+  hlBtn.disabled   = !on || isEpub;
+  signBtn.disabled = !on || isEpub;
 }
 
 // ── TOC Sidebar ────────────────────────────────────────────────────────────
@@ -144,6 +167,7 @@ async function refreshTOC() {
   }
   renderTOCItems(outline, tocTree, v);
 }
+
 
 function renderTOCItems(items, parent, viewer) {
   items.forEach(item => {
@@ -182,8 +206,14 @@ function renderTOCItems(items, parent, viewer) {
     title.textContent = item.title;
     title.title       = item.title;
     title.addEventListener('click', async () => {
-      const pg = await viewer.resolveDestination(item.dest);
-      if (pg) { await viewer.goToPage(pg); updateUI(); }
+      // EPUBViewer exposes navigateTo() for direct href navigation (preserves #anchors)
+      if (typeof viewer.navigateTo === 'function') {
+        await viewer.navigateTo(item.dest);
+      } else {
+        const pg = await viewer.resolveDestination(item.dest);
+        if (pg) await viewer.goToPage(pg);
+      }
+      updateUI();
     });
     row.appendChild(title);
 
@@ -216,7 +246,7 @@ async function runSearch() {
   const v = getActiveViewer();
   if (!v?.pdfDoc || !q) { clearSearch(); return; }
 
-  searchCount.textContent = '搜索中…';
+  searchCount.textContent = v.isEpub ? '章节搜索中…' : '搜索中…';
   searchPages = await v.searchAll(q);
   searchIdx   = searchPages.length ? 0 : -1;
 
@@ -225,7 +255,8 @@ async function runSearch() {
     return;
   }
 
-  searchCount.textContent = `第 1 / ${searchPages.length} 页`;
+  const unit = v.isEpub ? '章' : '页';
+  searchCount.textContent = `第 1 / ${searchPages.length} ${unit}`;
   await v.goToPage(searchPages[0]);
   v.highlightSearch(q);
   updateUI();
@@ -234,8 +265,9 @@ async function runSearch() {
 async function searchNav(dir) {
   if (!searchPages.length) return;
   searchIdx = (searchIdx + dir + searchPages.length) % searchPages.length;
-  searchCount.textContent = `第 ${searchIdx + 1} / ${searchPages.length} 页`;
-  const v = getActiveViewer();
+  const v    = getActiveViewer();
+  const unit = v?.isEpub ? '章' : '页';
+  searchCount.textContent = `第 ${searchIdx + 1} / ${searchPages.length} ${unit}`;
   await v.goToPage(searchPages[searchIdx]);
   v.highlightSearch(searchInput.value.trim());
   updateUI();
@@ -303,13 +335,15 @@ function confirmSignature() {
   if (!v) return;
 
   // Enter placement mode — click on PDF to place
-  v.el.style.cursor = 'crosshair';
-  v.el.style.userSelect = 'none';
+  // Use _scrollEl if available (PDFViewer), otherwise fall back to el (EPUBViewer)
+  const target = v._scrollEl ?? v.el;
+  target.style.cursor = 'crosshair';
+  target.style.userSelect = 'none';
 
   const onPlace = (e) => {
-    v.el.removeEventListener('click', onPlace);
-    v.el.style.cursor     = '';
-    v.el.style.userSelect = '';
+    target.removeEventListener('click', onPlace);
+    target.style.cursor     = '';
+    target.style.userSelect = '';
 
     const wrapper = e.target.closest('.page-wrapper');
     if (!wrapper) return;
@@ -317,7 +351,7 @@ function confirmSignature() {
     const wRect   = wrapper.getBoundingClientRect();
     v.addSignature(imageData, pageNum, e.clientX - wRect.left, e.clientY - wRect.top, 180, 72);
   };
-  v.el.addEventListener('click', onPlace);
+  target.addEventListener('click', onPlace);
 }
 
 // ── Recent Files ───────────────────────────────────────────────────────────
@@ -328,7 +362,7 @@ function refreshRecentFiles(list) {
     if (!t.viewer.filePath) {
       t.viewer.setRecentFiles(
         list,
-        fp => openPDF(fp),
+        fp => openFile(fp),
         async fp => {
           const updated = await window.electronAPI.removeRecent(fp);
           refreshRecentFiles(updated);
@@ -336,6 +370,17 @@ function refreshRecentFiles(list) {
       );
     }
   });
+}
+
+// ── Reading Mode (click-to-turn corners) ──────────────────────────────────
+
+let readingMode = false;
+
+function setReadingMode(on) {
+  readingMode = on;
+  document.getElementById('reading-btn').classList.toggle('active', on);
+  // Apply to the active viewer only; inactive tabs will be synced in setActiveTab
+  getActiveViewer()?.setReadingMode?.(on);
 }
 
 // ── Night Mode ─────────────────────────────────────────────────────────────
@@ -346,6 +391,8 @@ function toggleNightMode() {
   nightMode = !nightMode;
   document.body.classList.toggle('night-mode', nightMode);
   document.getElementById('night-btn').classList.toggle('active', nightMode);
+  // Apply night theme to all open EPUB tabs
+  tabs.forEach(t => { if (t.viewer.isEpub) t.viewer.setNightMode(nightMode); });
 }
 
 // ── Highlight Color Picker ─────────────────────────────────────────────────
@@ -365,7 +412,7 @@ document.querySelectorAll('.hl-swatch').forEach(sw => {
 
 document.getElementById('open-btn').addEventListener('click', async () => {
   const fp = await window.electronAPI.openFile();
-  if (fp) await openPDF(fp);
+  if (fp) await openFile(fp);
 });
 
 document.getElementById('new-tab-btn').addEventListener('click', async () => {
@@ -377,12 +424,14 @@ document.getElementById('new-tab-btn').addEventListener('click', async () => {
 
 prevBtn.addEventListener('click', async () => {
   const v = getActiveViewer(); if (!v) return;
-  await v.goToPage(v.currentPage - 1); updateUI();
+  if (v.isEpub) await v.prevPage(); else await v.goToPage(v.currentPage - 1);
+  updateUI();
 });
 
 nextBtn.addEventListener('click', async () => {
   const v = getActiveViewer(); if (!v) return;
-  await v.goToPage(v.currentPage + 1); updateUI();
+  if (v.isEpub) await v.nextPage(); else await v.goToPage(v.currentPage + 1);
+  updateUI();
 });
 
 zoomInBtn.addEventListener('click', async () => {
@@ -437,6 +486,7 @@ hlBtn.addEventListener('click',     () => getActiveViewer()?.addHighlight(active
 
 signBtn.addEventListener('click', openSigModal);
 
+document.getElementById('reading-btn').addEventListener('click', () => setReadingMode(!readingMode));
 document.getElementById('toc-toggle').addEventListener('click', toggleSidebar);
 document.getElementById('sidebar-close').addEventListener('click', () => sidebar.classList.remove('open'));
 
@@ -474,10 +524,14 @@ document.addEventListener('keydown', async (e) => {
   const v = getActiveViewer();
   if (!v) return;
 
-  if (e.key === 'ArrowRight' || e.key === 'PageDown') { await v.goToPage(v.currentPage + 1); updateUI(); }
-  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { await v.goToPage(v.currentPage - 1); updateUI(); }
-  else if (e.key === 'Home') { await v.goToPage(1); updateUI(); }
-  else if (e.key === 'End')  { await v.goToPage(v.numPages); updateUI(); }
+  if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+    if (v.isEpub) await v.nextPage(); else await v.goToPage(v.currentPage + 1);
+    updateUI();
+  } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+    if (v.isEpub) await v.prevPage(); else await v.goToPage(v.currentPage - 1);
+    updateUI();
+  } else if (e.key === 'Home') { await v.goToPage(1); updateUI(); }
+    else if (e.key === 'End')  { await v.goToPage(v.numPages); updateUI(); }
 });
 
 // ── Drag & Drop ────────────────────────────────────────────────────────────
@@ -494,12 +548,14 @@ document.addEventListener('drop', async (e) => {
   e.preventDefault();
   document.body.classList.remove('drag-over');
   const file = e.dataTransfer.files[0];
-  if (file?.name.toLowerCase().endsWith('.pdf')) await openPDF(file.path);
+  if (!file) return;
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.pdf') || name.endsWith('.epub')) await openFile(file.path);
 });
 
 // ── IPC from Menu ──────────────────────────────────────────────────────────
 
-window.electronAPI.onOpenFile(fp => openPDF(fp));
+window.electronAPI.onOpenFile(fp => openFile(fp));
 window.electronAPI.onNewTab(() => { const t = createTab(); setActiveTab(t.id); });
 window.electronAPI.onZoomIn(async () => { const v = getActiveViewer(); if (v) { await v.setZoom(v.zoom + 0.25); updateUI(); } });
 window.electronAPI.onZoomOut(async () => { const v = getActiveViewer(); if (v) { await v.setZoom(v.zoom - 0.25); updateUI(); } });

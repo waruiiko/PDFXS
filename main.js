@@ -64,7 +64,11 @@ function createWindow() {
           accelerator: 'CmdOrCtrl+O',
           click: async () => {
             const result = await dialog.showOpenDialog(mainWindow, {
-              filters: [{ name: 'PDF 文件', extensions: ['pdf'] }],
+              filters: [
+                { name: 'PDF / EPUB 文件', extensions: ['pdf', 'epub'] },
+                { name: 'PDF 文件',        extensions: ['pdf'] },
+                { name: 'EPUB 文件',       extensions: ['epub'] },
+              ],
               properties: ['openFile'],
             });
             if (!result.canceled && result.filePaths.length > 0) {
@@ -117,7 +121,11 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 
 ipcMain.handle('dialog:openFile', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    filters: [{ name: 'PDF 文件', extensions: ['pdf'] }],
+    filters: [
+      { name: 'PDF / EPUB 文件', extensions: ['pdf', 'epub'] },
+      { name: 'PDF 文件',        extensions: ['pdf'] },
+      { name: 'EPUB 文件',       extensions: ['epub'] },
+    ],
     properties: ['openFile'],
   });
   return result.canceled ? null : result.filePaths[0];
