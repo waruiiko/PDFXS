@@ -23,7 +23,7 @@ body {
 }
 
 /* UI chrome — not selectable; PDF content area inherits default (selectable) */
-#toolbar, #search-bar, #tab-bar, #sidebar,
+#toolbar, #search-bar, #tts-bar, #tab-bar, #sidebar,
 .tab, .toc-row, .toc-title, .drop-hint,
 button, .ctx-menu, #sig-dialog {
   user-select: none;
@@ -154,6 +154,59 @@ button, .ctx-menu, #sig-dialog {
 #search-count { color: #666; font-size: 12px; min-width: 100px; }
 #search-close { margin-left: auto; }
 
+/* ── TTS Bar ──────────────────────────────────────────────────────────────── */
+#tts-bar {
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: #1a1f35;
+  border-bottom: 1px solid #2a3060;
+  flex-shrink: 0;
+}
+
+#tts-bar button {
+  background: #2a3060;
+  border: 1px solid #3a4880;
+  color: #ccc;
+  padding: 3px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background .1s;
+}
+#tts-bar button:hover:not(:disabled) { background: #3a4880; color: #fff; }
+#tts-bar button:disabled { opacity: .35; cursor: default; }
+
+#tts-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #a0b0e0;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.tts-label { color: #666; font-size: 12px; white-space: nowrap; }
+
+#tts-rate, #tts-voice {
+  background: #1e1e2e;
+  border: 1px solid #3a4880;
+  color: #ccc;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+#tts-rate  { width: 68px; }
+#tts-voice { max-width: 180px; }
+
+#tts-close { margin-left: auto; }
+
+/* Locate mode: highlight button and change epub iframe cursor */
+#tts-locate.active { background: #3a6ee8 !important; border-color: #5a8ef0 !important; color: #fff !important; }
+.tts-locating .epub-container iframe { cursor: crosshair !important; }
+
 /* ── Main (sidebar + content) ─────────────────────────────────────────────── */
 #main {
   display: flex;
@@ -174,33 +227,115 @@ button, .ctx-menu, #sig-dialog {
 }
 #sidebar.open { width: 260px; }
 
-#sidebar-header {
+#sidebar-tabs {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
   border-bottom: 1px solid #333;
-  font-size: 13px;
-  font-weight: 600;
-  color: #aaa;
+  padding: 0 4px;
+  gap: 2px;
   flex-shrink: 0;
 }
-#sidebar-header button {
+
+.sidebar-tab {
   background: none;
   border: none;
+  border-bottom: 2px solid transparent;
   color: #666;
   cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 10px 5px;
+  transition: color .15s, border-color .15s;
+}
+.sidebar-tab:hover { color: #bbb; }
+.sidebar-tab.active { color: #ddd; border-bottom-color: #5a8ef0; }
+
+#sidebar-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
   font-size: 14px;
-  padding: 2px 4px;
+  padding: 4px 6px;
   border-radius: 3px;
 }
-#sidebar-header button:hover { color: #ccc; background: #333; }
+#sidebar-close:hover { color: #ccc; background: #333; }
 
 #toc-tree {
   flex: 1;
   overflow-y: auto;
   padding: 6px 0;
 }
+
+#notes-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.notes-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 10px 2px;
+  flex-shrink: 0;
+}
+.notes-export-btn {
+  background: #2a2a3a;
+  border: 1px solid #444;
+  color: #aaa;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.notes-export-btn:hover { background: #3a3a5a; color: #ddd; }
+
+.note-empty { color: #555; font-size: 12px; padding: 12px 16px; }
+
+.note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #2a2a2a;
+  transition: background .1s;
+}
+.note-item:hover { background: #2a2a2a; }
+
+.note-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.note-text {
+  font-size: 12px;
+  color: #bbb;
+  line-height: 1.45;
+  flex: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.note-item:hover .note-text { color: #ddd; }
+
+.note-del {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  flex-shrink: 0;
+  line-height: 1;
+  border-radius: 3px;
+}
+.note-del:hover { color: #e07070; background: #3a2a2a; }
 
 .toc-empty { color: #555; font-size: 12px; padding: 12px 16px; }
 
@@ -275,6 +410,8 @@ button, .ctx-menu, #sig-dialog {
 }
 .tab:hover { background: #272727; color: #aaa; }
 .tab.active { background: #1a1a1a; color: #ccc; border-top: 2px solid #3a6ee8; }
+.tab.tab-dragging  { opacity: 0.45; }
+.tab.tab-drag-over { box-shadow: -3px 0 0 #5a8ef0; }
 
 .tab-title {
   flex: 1;

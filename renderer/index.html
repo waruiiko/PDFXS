@@ -40,8 +40,30 @@
       <button id="highlight-btn" disabled title="高亮选中文字 (Ctrl+H)">高亮</button>
       <button id="sign-btn"      disabled title="添加签名">签名</button>
       <button id="reading-btn"   title="阅读模式 — 点击左/右下角翻页">阅读</button>
+      <button id="tts-btn"       disabled title="朗读 (仅 EPUB)">🔊</button>
       <button id="search-toggle" title="搜索 (Ctrl+F)">🔍</button>
       <button id="night-btn"    title="夜间模式 (Ctrl+D)">夜间</button>
+    </div>
+
+    <!-- ── TTS bar ── -->
+    <div id="tts-bar" style="display:none">
+      <button id="tts-play"   title="播放">▶</button>
+      <button id="tts-pause"  title="暂停" disabled>⏸</button>
+      <button id="tts-stop"   title="停止" disabled>⏹</button>
+      <button id="tts-locate" title="点击定位 — 激活后单击页面文字从该处开始朗读">定位</button>
+      <div class="sep"></div>
+      <div id="tts-text">—</div>
+      <div class="sep"></div>
+      <span class="tts-label">速度</span>
+      <select id="tts-rate">
+        <option value="0.75">0.75×</option>
+        <option value="1" selected>1×</option>
+        <option value="1.25">1.25×</option>
+        <option value="1.5">1.5×</option>
+        <option value="2">2×</option>
+      </select>
+      <select id="tts-voice" title="朗读声音"></select>
+      <button id="tts-close" title="关闭">✕</button>
     </div>
 
     <!-- ── Search bar ── -->
@@ -57,13 +79,15 @@
     <!-- ── Main ── -->
     <div id="main">
 
-      <!-- Sidebar / TOC -->
+      <!-- Sidebar / TOC / Notes -->
       <div id="sidebar">
-        <div id="sidebar-header">
-          <span>目录</span>
+        <div id="sidebar-tabs">
+          <button id="tab-toc"   class="sidebar-tab active" title="目录">目录</button>
+          <button id="tab-notes" class="sidebar-tab"        title="笔记">笔记</button>
           <button id="sidebar-close" title="关闭侧栏">✕</button>
         </div>
         <div id="toc-tree"></div>
+        <div id="notes-list" style="display:none"></div>
       </div>
 
       <!-- Content: tab bar + viewers -->

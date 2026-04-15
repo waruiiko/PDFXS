@@ -10,6 +10,17 @@ let tabs         = [];
 let activeTabId  = null;
 let tabCounter   = 0;
 
+function bindViewerCallbacks(viewer) {
+  viewer._onPageChange = () => { if (viewer === getActiveViewer()) updateUI(); };
+  if (viewer.isEpub) {
+    viewer._onAnnotationChange = () => {
+      if (viewer === getActiveViewer() && sidebarPanel === 'notes' && sidebar.classList.contains('open')) {
+        refreshNotes();
+      }
+    };
+  }
+}
+
 function createTab(title = '新标签页') {
   const id = ++tabCounter;
 
@@ -19,6 +30,49 @@ function createTab(title = '新标签页') {
   tabEl.innerHTML  = `<span class="tab-title" title="${title}">${title}</span><button class="tab-close" title="关闭">×</button>`;
   tabEl.querySelector('.tab-close').addEventListener('click', (e) => { e.stopPropagation(); closeTab(id); });
   tabEl.addEventListener('click', () => setActiveTab(id));
+
+  // ── Tab drag-to-reorder ──────────────────────────────────────────────────
+  tabEl.draggable = true;
+
+  tabEl.addEventListener('dragstart', (e) => {
+    e.stopPropagation();
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/x-tab-id', String(id));
+    tabEl.classList.add('tab-dragging');
+  });
+  tabEl.addEventListener('dragend', () => {
+    tabEl.classList.remove('tab-dragging');
+    document.querySelectorAll('.tab-drag-over').forEach(t => t.classList.remove('tab-drag-over'));
+  });
+  tabEl.addEventListener('dragover', (e) => {
+    if (!e.dataTransfer.types.includes('text/x-tab-id')) return; // ignore file drops
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.tab-drag-over').forEach(t => t.classList.remove('tab-drag-over'));
+    tabEl.classList.add('tab-drag-over');
+  });
+  tabEl.addEventListener('dragleave', (e) => {
+    if (!tabEl.contains(e.relatedTarget)) tabEl.classList.remove('tab-drag-over');
+  });
+  tabEl.addEventListener('drop', (e) => {
+    if (!e.dataTransfer.types.includes('text/x-tab-id')) return; // ignore file drops
+    e.preventDefault();
+    e.stopPropagation();
+    tabEl.classList.remove('tab-drag-over');
+    const fromId  = parseInt(e.dataTransfer.getData('text/x-tab-id'), 10);
+    if (fromId === id) return;
+    const fromIdx = tabs.findIndex(t => t.id === fromId);
+    const toIdx   = tabs.findIndex(t => t.id === id);
+    if (fromIdx < 0 || toIdx < 0) return;
+    // Reorder array
+    const [moved] = tabs.splice(fromIdx, 1);
+    tabs.splice(toIdx, 0, moved);
+    // Reorder DOM: insert before or after depending on direction
+    if (fromIdx < toIdx) tabBar.insertBefore(moved.tabEl, tabEl.nextSibling);
+    else                 tabBar.insertBefore(moved.tabEl, tabEl);
+  });
+
   tabBar.appendChild(tabEl);
 
   const container = document.createElement('div');
@@ -27,7 +81,7 @@ function createTab(title = '新标签页') {
   viewersEl.appendChild(container);
 
   const viewer = new PDFViewer();
-  viewer._onPageChange = () => { if (viewer === getActiveViewer()) updateUI(); };
+  bindViewerCallbacks(viewer);
   container.appendChild(viewer.el);
 
   const tab = { id, title, viewer, tabEl, container };
@@ -36,6 +90,10 @@ function createTab(title = '新标签页') {
 }
 
 function setActiveTab(id) {
+  if (id !== activeTabId) {
+    ttsSetLocating(false);
+    ttsStop();
+  }
   activeTabId = id;
   tabs.forEach(t => {
     const on = t.id === id;
@@ -44,8 +102,10 @@ function setActiveTab(id) {
     // Apply reading mode to active viewer only; disable on all hidden tabs
     t.viewer.setReadingMode?.(on ? readingMode : false);
   });
+  // If locate mode was on, it was already cleared above; nothing else to rebind
   updateUI();
-  refreshTOC();
+  if (sidebarPanel === 'notes') refreshNotes();
+  else refreshTOC();
 }
 
 function closeTab(id) {
@@ -69,6 +129,9 @@ function getActiveViewer() { return getActiveTab()?.viewer || null; }
 // ── Open file (PDF or EPUB) ────────────────────────────────────────────────
 
 async function openFile(filePath) {
+  ttsSetLocating(false);
+  ttsStop();
+
   const ext    = filePath.split('.').pop().toLowerCase();
   const isEpub = ext === 'epub';
 
@@ -84,7 +147,7 @@ async function openFile(filePath) {
   if (needsSwap) {
     tab.container.removeChild(tab.viewer.el);
     tab.viewer = isEpub ? new EPUBViewer() : new PDFViewer();
-    tab.viewer._onPageChange = () => { if (tab.viewer === getActiveViewer()) updateUI(); };
+    bindViewerCallbacks(tab.viewer);
     tab.container.appendChild(tab.viewer.el);
     if (isEpub && nightMode) tab.viewer.setNightMode(true);
     tab.viewer.setReadingMode?.(readingMode);
@@ -108,7 +171,8 @@ async function openFile(filePath) {
   refreshRecentFiles(recent);
 
   updateUI();
-  refreshTOC();
+  if (sidebarPanel === 'notes') refreshNotes();
+  else refreshTOC();
 }
 
 // ── Toolbar state ──────────────────────────────────────────────────────────
@@ -141,17 +205,41 @@ function updateUI() {
   zoomInBtn.disabled  = !on;
   zoomOutBtn.disabled = !on;
   zoomFitBtn.disabled = !on;
-  // Highlight and signature are PDF-only features
-  hlBtn.disabled   = !on || isEpub;
+  // Signature is PDF-only; highlight works for both PDF and EPUB
+  hlBtn.disabled   = !on;
   signBtn.disabled = !on || isEpub;
+  // TTS is EPUB-only
+  document.getElementById('tts-btn').disabled = !on || !isEpub;
 }
 
 // ── TOC Sidebar ────────────────────────────────────────────────────────────
 
-const sidebar  = document.getElementById('sidebar');
-const tocTree  = document.getElementById('toc-tree');
+const sidebar   = document.getElementById('sidebar');
+const tocTree   = document.getElementById('toc-tree');
+const notesList = document.getElementById('notes-list');
 
-function toggleSidebar() { sidebar.classList.toggle('open'); }
+// ── Sidebar tab switching ─────────────────────────────────────────────────
+
+let sidebarPanel = 'toc'; // 'toc' | 'notes'
+
+function setSidebarPanel(panel) {
+  sidebarPanel = panel;
+  document.getElementById('tab-toc').classList.toggle('active',   panel === 'toc');
+  document.getElementById('tab-notes').classList.toggle('active', panel === 'notes');
+  tocTree.style.display   = panel === 'toc'   ? '' : 'none';
+  notesList.style.display = panel === 'notes' ? '' : 'none';
+  if (panel === 'notes') refreshNotes();
+  else refreshTOC();
+}
+
+function toggleSidebar() {
+  const opening = !sidebar.classList.contains('open');
+  sidebar.classList.toggle('open');
+  if (opening) {
+    if (sidebarPanel === 'notes') refreshNotes();
+    else refreshTOC();
+  }
+}
 
 async function refreshTOC() {
   tocTree.innerHTML = '';
@@ -166,6 +254,87 @@ async function refreshTOC() {
     return;
   }
   renderTOCItems(outline, tocTree, v);
+}
+
+function refreshNotes() {
+  notesList.innerHTML = '';
+  const v = getActiveViewer();
+  if (!v?.isEpub || !v.pdfDoc) {
+    notesList.innerHTML = '<p class="note-empty">仅 EPUB 支持笔记</p>';
+    return;
+  }
+  const highlights = v._epubHighlights || [];
+  if (!highlights.length) {
+    notesList.innerHTML = '<p class="note-empty">暂无高亮笔记</p>';
+    return;
+  }
+  // Header row with export button
+  const hdr = document.createElement('div');
+  hdr.className = 'notes-header';
+  const exportBtn = document.createElement('button');
+  exportBtn.className = 'notes-export-btn';
+  exportBtn.textContent = '导出 .md';
+  exportBtn.title = '将所有高亮笔记导出为 Markdown 文件';
+  exportBtn.addEventListener('click', async () => {
+    const title     = v.filePath.split(/[\\/]/).pop().replace(/\.\w+$/, '');
+    const colorMark = { '#ffff00': '🟡', '#90ee90': '🟢', '#add8e6': '🔵' };
+
+    // Group highlights by chapter, preserving insertion order
+    const chapters = new Map(); // chapterTitle → highlight[]
+    for (const h of v._epubHighlights) {
+      // Use stored chapter; fall back to CFI-derived title for older highlights
+      const chap = h.chapter || v._cfiToChapter?.(h.cfiRange) || '(未知章节)';
+      if (!chapters.has(chap)) chapters.set(chap, []);
+      chapters.get(chap).push(h);
+    }
+
+    const lines = [`# ${title} — 高亮笔记\n`];
+    for (const [chap, items] of chapters) {
+      lines.push(`\n## ${chap}\n`);
+      for (const h of items) {
+        const mark = colorMark[h.color] ?? '▪';
+        lines.push(`- ${mark} ${h.text || '(无文字)'}`);
+      }
+    }
+
+    const md = lines.join('\n');
+    const savePath = await window.electronAPI.showSaveDialog({
+      defaultPath: `${title}-笔记.md`,
+      filters: [{ name: 'Markdown', extensions: ['md'] }, { name: '所有文件', extensions: ['*'] }],
+    });
+    if (savePath) await window.electronAPI.writeFile(savePath, md);
+  });
+  hdr.appendChild(exportBtn);
+  notesList.appendChild(hdr);
+
+  for (const h of highlights) {
+    const item = document.createElement('div');
+    item.className = 'note-item';
+
+    const dot = document.createElement('div');
+    dot.className = 'note-color';
+    dot.style.background = h.color;
+
+    const txt = document.createElement('div');
+    txt.className   = 'note-text';
+    txt.textContent = h.text || '(无文字)';
+
+    const del = document.createElement('button');
+    del.className   = 'note-del';
+    del.title       = '删除高亮';
+    del.textContent = '✕';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      v._removeHighlight(h);
+      refreshNotes();
+    });
+
+    item.append(dot, txt, del);
+    item.addEventListener('click', async () => {
+      await v.navigateToCFI(h.cfiRange);
+    });
+    notesList.appendChild(item);
+  }
 }
 
 
@@ -246,18 +415,14 @@ async function runSearch() {
   const v = getActiveViewer();
   if (!v?.pdfDoc || !q) { clearSearch(); return; }
 
-  searchCount.textContent = v.isEpub ? '章节搜索中…' : '搜索中…';
+  searchCount.textContent = '搜索中…';
   searchPages = await v.searchAll(q);
   searchIdx   = searchPages.length ? 0 : -1;
 
-  if (!searchPages.length) {
-    searchCount.textContent = '无结果';
-    return;
-  }
+  if (!searchPages.length) { searchCount.textContent = '无结果'; return; }
 
-  const unit = v.isEpub ? '章' : '页';
-  searchCount.textContent = `第 1 / ${searchPages.length} ${unit}`;
-  await v.goToPage(searchPages[0]);
+  searchUpdateCount(v);
+  await searchGoTo(v, 0);
   v.highlightSearch(q);
   updateUI();
 }
@@ -265,12 +430,32 @@ async function runSearch() {
 async function searchNav(dir) {
   if (!searchPages.length) return;
   searchIdx = (searchIdx + dir + searchPages.length) % searchPages.length;
-  const v    = getActiveViewer();
-  const unit = v?.isEpub ? '章' : '页';
-  searchCount.textContent = `第 ${searchIdx + 1} / ${searchPages.length} ${unit}`;
-  await v.goToPage(searchPages[searchIdx]);
+  const v = getActiveViewer();
+  searchUpdateCount(v);
+  await searchGoTo(v, searchIdx);
   v.highlightSearch(searchInput.value.trim());
   updateUI();
+}
+
+// Navigate to search result at index i (handles both PDF page numbers and EPUB CFIs)
+async function searchGoTo(v, i) {
+  const r = searchPages[i];
+  if (v.isEpub) await v.navigateToCFI(r.cfi);
+  else          await v.goToPage(r);
+}
+
+function searchUpdateCount(v) {
+  const n   = searchPages.length;
+  const cur = searchIdx + 1;
+  if (v?.isEpub) {
+    const exc = searchPages[searchIdx]?.excerpt || '';
+    const short = exc.length > 40 ? exc.slice(0, 40) + '…' : exc;
+    searchCount.textContent = `${cur} / ${n}`;
+    searchCount.title = short;
+  } else {
+    searchCount.textContent = `第 ${cur} / ${n} 页`;
+    searchCount.title = '';
+  }
 }
 
 function clearSearch() {
@@ -383,6 +568,233 @@ function setReadingMode(on) {
   getActiveViewer()?.setReadingMode?.(on);
 }
 
+// ── TTS (Text-to-Speech, EPUB only) ───────────────────────────────────────
+
+const ttsBar      = document.getElementById('tts-bar');
+const ttsPlayBtn  = document.getElementById('tts-play');
+const ttsPauseBtn = document.getElementById('tts-pause');
+const ttsStopBtn  = document.getElementById('tts-stop');
+const ttsTextEl   = document.getElementById('tts-text');
+const ttsRateSel  = document.getElementById('tts-rate');
+const ttsVoiceSel = document.getElementById('tts-voice');
+
+// State machine
+const tts = {
+  open:       false,   // control bar visible
+  playing:    false,
+  paused:     false,
+  sentences:  [],
+  idx:        0,
+  advancing:  false,   // true while auto-advancing to next page
+};
+
+// ── Sentence splitter ──────────────────────────────────────────────────────
+function ttsSplit(text) {
+  // Split on sentence-ending punctuation (Latin + CJK), keep non-empty pieces
+  return text
+    .split(/(?<=[.!?。！？…\r\n])\s*/u)
+    .map(s => s.trim())
+    .filter(s => s.length > 1);
+}
+
+// ── Voice list ─────────────────────────────────────────────────────────────
+function ttsPopulateVoices() {
+  const voices = speechSynthesis.getVoices();
+  ttsVoiceSel.innerHTML = '';
+  // Preferred: Chinese voices first, then all others
+  const sorted = [
+    ...voices.filter(v => /zh|cmn|yue|wuu/i.test(v.lang)),
+    ...voices.filter(v => !/zh|cmn|yue|wuu/i.test(v.lang)),
+  ];
+  if (!sorted.length) {
+    const opt = document.createElement('option');
+    opt.textContent = '系统默认';
+    ttsVoiceSel.appendChild(opt);
+    return;
+  }
+  sorted.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value       = v.voiceURI;
+    opt.textContent = `${v.name} (${v.lang})`;
+    ttsVoiceSel.appendChild(opt);
+  });
+}
+
+speechSynthesis.addEventListener('voiceschanged', ttsPopulateVoices);
+ttsPopulateVoices();
+
+function ttsGetVoice() {
+  const uri = ttsVoiceSel.value;
+  return speechSynthesis.getVoices().find(v => v.voiceURI === uri) ?? null;
+}
+
+// ── Core playback ──────────────────────────────────────────────────────────
+function ttsUpdateUI() {
+  ttsPlayBtn.disabled  = tts.playing && !tts.paused;
+  ttsPauseBtn.disabled = !tts.playing || tts.paused;
+  ttsStopBtn.disabled  = !tts.playing && !tts.paused;
+  if (!tts.playing && !tts.paused) ttsTextEl.textContent = '—';
+}
+
+function ttsSpeak() {
+  if (!tts.playing || tts.paused || tts.advancing) return;
+  if (tts.idx >= tts.sentences.length) {
+    ttsNextPage();
+    return;
+  }
+  const sentence = tts.sentences[tts.idx];
+  ttsTextEl.textContent = sentence;
+
+  const utt = new SpeechSynthesisUtterance(sentence);
+  utt.rate  = parseFloat(ttsRateSel.value);
+  const v   = ttsGetVoice();
+  if (v) utt.voice = v;
+
+  utt.onend = () => {
+    if (!tts.playing || tts.paused) return;
+    tts.idx++;
+    ttsSpeak();
+  };
+  utt.onerror = (e) => {
+    if (e.error === 'interrupted' || e.error === 'canceled') return;
+    console.warn('[TTS] utterance error:', e.error);
+  };
+
+  speechSynthesis.cancel();   // flush any queued utterances
+  speechSynthesis.speak(utt);
+}
+
+async function ttsNextPage() {
+  const v = getActiveViewer();
+  if (!v?.isEpub) { ttsStop(); return; }
+  if (v._atEnd)   { ttsStop(); return; }
+
+  tts.advancing = true;
+  await v.nextPage();
+  // Give epub.js ~400 ms to render new iframe content
+  await new Promise(r => setTimeout(r, 400));
+  tts.advancing = false;
+
+  const text = v.getTTSText();
+  if (!text) { ttsStop(); return; }
+
+  tts.sentences = ttsSplit(text);
+  tts.idx       = 0;
+  ttsSpeak();
+}
+
+// ── Public actions ─────────────────────────────────────────────────────────
+async function ttsPlay() {
+  const v = getActiveViewer();
+  if (!v?.isEpub || !v.pdfDoc) return;
+
+  if (tts.paused) {
+    tts.paused = false;
+    speechSynthesis.resume();
+    ttsUpdateUI();
+    return;
+  }
+
+  // Fresh start: load current page text
+  const text = v.getTTSText();
+  if (!text) return;
+
+  tts.playing   = true;
+  tts.paused    = false;
+  tts.sentences = ttsSplit(text);
+  tts.idx       = 0;
+  ttsUpdateUI();
+  ttsSpeak();
+}
+
+function ttsPause() {
+  if (!tts.playing) return;
+  tts.paused = true;
+  speechSynthesis.pause();
+  ttsUpdateUI();
+}
+
+function ttsStop() {
+  tts.playing   = false;
+  tts.paused    = false;
+  tts.advancing = false;
+  tts.sentences = [];
+  tts.idx       = 0;
+  speechSynthesis.cancel();
+  ttsUpdateUI();
+  if (tts.open) ttsTextEl.textContent = '点击文字开始朗读，或按 ▶';
+}
+
+// ── TTS locate mode (click-to-position, opt-in) ────────────────────────────
+
+const ttsLocateBtn = document.getElementById('tts-locate');
+let ttsLocating = false;
+
+function ttsFindIdx(sentences, fullText, clickedText) {
+  if (!sentences.length) return 0;
+  const probe = clickedText.substring(0, Math.min(60, clickedText.length));
+  const off   = fullText.indexOf(probe);
+  if (off < 0) return 0;
+  let cum = 0;
+  for (let i = 0; i < sentences.length; i++) {
+    if (cum >= off) return i;
+    cum += sentences[i].length + 1;
+  }
+  return Math.max(0, sentences.length - 1);
+}
+
+function ttsSetLocating(on) {
+  ttsLocating = on;
+  ttsLocateBtn.classList.toggle('active', on);
+  // Visual cue: crosshair cursor on the EPUB container while locating
+  document.getElementById('viewers').classList.toggle('tts-locating', on);
+  const v = getActiveViewer();
+  if (on && v?.isEpub) {
+    v.enableTTSClick((clickedText) => {
+      // One-shot: disable locate mode after the first click
+      ttsSetLocating(false);
+      const fullText  = v.getTTSText();
+      const sentences = ttsSplit(fullText);
+      const idx       = ttsFindIdx(sentences, fullText, clickedText);
+      tts.playing   = true;
+      tts.paused    = false;
+      tts.sentences = sentences;
+      tts.idx       = idx;
+      speechSynthesis.cancel();
+      ttsUpdateUI();
+      ttsSpeak();
+    });
+  } else {
+    v?.disableTTSClick?.();
+  }
+}
+
+ttsLocateBtn.addEventListener('click', () => ttsSetLocating(!ttsLocating));
+
+function ttsToggleBar() {
+  tts.open = !tts.open;
+  ttsBar.style.display = tts.open ? 'flex' : 'none';
+  document.getElementById('tts-btn').classList.toggle('active', tts.open);
+  if (!tts.open) {
+    ttsSetLocating(false);
+    ttsStop();
+  }
+}
+
+// ── Wire up controls ───────────────────────────────────────────────────────
+document.getElementById('tts-btn').addEventListener('click', ttsToggleBar);
+ttsPlayBtn.addEventListener('click',  ttsPlay);
+ttsPauseBtn.addEventListener('click', ttsPause);
+ttsStopBtn.addEventListener('click',  ttsStop);
+document.getElementById('tts-close').addEventListener('click', ttsToggleBar);
+ttsRateSel.addEventListener('change', () => {
+  // Apply new rate immediately if playing (restart current sentence)
+  if (tts.playing && !tts.paused) {
+    speechSynthesis.cancel();
+    ttsSpeak();
+  }
+});
+
 // ── Night Mode ─────────────────────────────────────────────────────────────
 
 let nightMode = false;
@@ -489,6 +901,8 @@ signBtn.addEventListener('click', openSigModal);
 document.getElementById('reading-btn').addEventListener('click', () => setReadingMode(!readingMode));
 document.getElementById('toc-toggle').addEventListener('click', toggleSidebar);
 document.getElementById('sidebar-close').addEventListener('click', () => sidebar.classList.remove('open'));
+document.getElementById('tab-toc').addEventListener('click',   () => setSidebarPanel('toc'));
+document.getElementById('tab-notes').addEventListener('click', () => setSidebarPanel('notes'));
 
 document.getElementById('search-toggle').addEventListener('click', toggleSearch);
 document.getElementById('night-btn').addEventListener('click', toggleNightMode);
@@ -570,7 +984,11 @@ window.electronAPI.onNightMode(() => toggleNightMode());
 
 // ── Save before close ──────────────────────────────────────────────────────
 
-window.addEventListener('beforeunload', () => tabs.forEach(t => t.viewer.saveFormData()));
+// Main process intercepts window close, asks us to save, then we confirm quit
+window.electronAPI.onAppClose(async () => {
+  tabs.forEach(t => t.viewer.saveFormData());
+  await window.electronAPI.confirmQuit();
+});
 
 // ── Init ───────────────────────────────────────────────────────────────────
 

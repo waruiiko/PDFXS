@@ -7,9 +7,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadProgress:      (fp)             => ipcRenderer.invoke('progress:load', fp),
   saveAnnotations:   (fp, data)       => ipcRenderer.invoke('annotations:save', fp, data),
   loadAnnotations:   (fp)             => ipcRenderer.invoke('annotations:load', fp),
+  showSaveDialog:    (opts)           => ipcRenderer.invoke('dialog:saveFile', opts),
+  writeFile:         (fp, content)    => ipcRenderer.invoke('file:write', fp, content),
   loadRecent:        ()               => ipcRenderer.invoke('recent:load'),
   addRecent:         (fp)             => ipcRenderer.invoke('recent:add', fp),
   removeRecent:      (fp)             => ipcRenderer.invoke('recent:remove', fp),
+
+  confirmQuit:    ()              => ipcRenderer.invoke('app:quit'),
+  onAppClose:     (cb) => ipcRenderer.on('app-close',       ()         => cb()),
 
   onOpenFile:     (cb) => ipcRenderer.on('open-file',       (_, fp)    => cb(fp)),
   onNewTab:       (cb) => ipcRenderer.on('new-tab',         ()         => cb()),

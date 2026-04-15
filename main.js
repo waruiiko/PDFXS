@@ -4,6 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 let mainWindow;
+let forceQuit = false; // set to true when renderer has already saved
 
 // ── Paths ──────────────────────────────────────────────────────────────────
 
@@ -30,13 +31,34 @@ function saveAllProgress(data) {
   fs.writeFileSync(getProgressPath(), JSON.stringify(data, null, 2), 'utf-8');
 }
 
+// ── Window state ───────────────────────────────────────────────────────────
+
+function getWindowStatePath() {
+  return path.join(app.getPath('userData'), 'window-state.json');
+}
+
+function loadWindowState() {
+  try { return JSON.parse(fs.readFileSync(getWindowStatePath(), 'utf-8')); }
+  catch { return { width: 1280, height: 860 }; }
+}
+
+function saveWindowState(win) {
+  if (!win || win.isMaximized() || win.isMinimized() || win.isDestroyed()) return;
+  try { fs.writeFileSync(getWindowStatePath(), JSON.stringify(win.getBounds(), null, 2)); }
+  catch {}
+}
+
 // ── Window ─────────────────────────────────────────────────────────────────
 
 function createWindow() {
+  const state = loadWindowState();
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 860,
-    minWidth: 700,
+    width:     state.width  || 1280,
+    height:    state.height || 860,
+    x:         state.x,
+    y:         state.y,
+    minWidth:  700,
     minHeight: 500,
     backgroundColor: '#1a1a1a',
     webPreferences: {
@@ -45,6 +67,23 @@ function createWindow() {
       nodeIntegration: false,
     },
     title: 'PDFXS',
+  });
+
+  // Save window bounds on resize/move (debounced)
+  let boundsTimer = null;
+  const debounceSave = () => {
+    clearTimeout(boundsTimer);
+    boundsTimer = setTimeout(() => saveWindowState(mainWindow), 500);
+  };
+  mainWindow.on('resize', debounceSave);
+  mainWindow.on('move',   debounceSave);
+
+  // Intercept close: ask renderer to save first, then really quit
+  mainWindow.on('close', (e) => {
+    if (forceQuit) return;          // renderer already saved, allow close
+    e.preventDefault();
+    saveWindowState(mainWindow);    // save bounds before hiding
+    mainWindow.webContents.send('app-close');
   });
 
   mainWindow.loadFile('renderer/index.html');
@@ -116,6 +155,8 @@ function createWindow() {
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+// Menu "Quit" sets forceQuit so the close handler doesn't intercept
+app.on('before-quit', () => { forceQuit = true; });
 
 // ── IPC Handlers ───────────────────────────────────────────────────────────
 
@@ -157,6 +198,21 @@ ipcMain.handle('annotations:load', (_, filePath) => {
 ipcMain.handle('annotations:save', (_, filePath, data) => {
   const p = getAnnotationsPath(filePath);
   fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf-8');
+});
+
+// Renderer calls this after saving all open tabs; we then allow the close
+ipcMain.handle('app:quit', () => {
+  forceQuit = true;
+  mainWindow.close();
+});
+
+ipcMain.handle('dialog:saveFile', async (_, opts) => {
+  const result = await dialog.showSaveDialog(mainWindow, opts);
+  return result.canceled ? null : result.filePath;
+});
+
+ipcMain.handle('file:write', (_, filePath, content) => {
+  fs.writeFileSync(filePath, content, 'utf-8');
 });
 
 // ── Recent Files ───────────────────────────────────────────────────────────
