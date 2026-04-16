@@ -52,6 +52,16 @@ export class MDViewer {
 
     this._preview.innerHTML = marked.parse(content);
 
+    // Resolve relative image paths → absolute file:// URLs
+    // base must end with '/' so URL() treats it as a directory
+    const base = 'file:///' + filePath.replace(/\\/g, '/').replace(/[^/]+$/, '');
+    this._preview.querySelectorAll('img[src]').forEach(img => {
+      const src = img.getAttribute('src');
+      if (src && !src.startsWith('http') && !src.startsWith('file://') && !src.startsWith('data:')) {
+        try { img.src = new URL(src, base).href; } catch {}
+      }
+    });
+
     // Disable external links (no browser in Electron renderer)
     this._preview.querySelectorAll('a[href]').forEach(a => {
       a.addEventListener('click', e => e.preventDefault());
