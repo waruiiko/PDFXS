@@ -1,5 +1,6 @@
 import { PDFViewer }  from './viewer.js';
 import { EPUBViewer } from './epub-viewer.js';
+import { MDViewer }   from './md-viewer.js';
 
 // ── Tab Manager ────────────────────────────────────────────────────────────
 
@@ -134,6 +135,7 @@ async function openFile(filePath) {
 
   const ext    = filePath.split('.').pop().toLowerCase();
   const isEpub = ext === 'epub';
+  const isMd   = ext === 'md' || ext === 'markdown';
 
   let tab = getActiveTab();
   // Reuse current tab only if it has no file open
@@ -142,15 +144,18 @@ async function openFile(filePath) {
   }
   setActiveTab(tab.id);
 
-  // If the tab's viewer type doesn't match the file type, swap it out
-  const needsSwap = (isEpub && !tab.viewer.isEpub) || (!isEpub && tab.viewer.isEpub);
-  if (needsSwap) {
+  // Swap viewer type when the file type doesn't match the current viewer
+  const currentType = tab.viewer.isEpub ? 'epub' : tab.viewer.isMd ? 'md' : 'pdf';
+  const targetType  = isEpub ? 'epub' : isMd ? 'md' : 'pdf';
+  if (currentType !== targetType) {
     tab.container.removeChild(tab.viewer.el);
-    tab.viewer = isEpub ? new EPUBViewer() : new PDFViewer();
+    if (isEpub)   tab.viewer = new EPUBViewer();
+    else if (isMd) tab.viewer = new MDViewer();
+    else           tab.viewer = new PDFViewer();
     bindViewerCallbacks(tab.viewer);
     tab.container.appendChild(tab.viewer.el);
-    if (isEpub && nightMode) tab.viewer.setNightMode(true);
-    tab.viewer.setReadingMode?.(readingMode);
+    if (!isMd && nightMode) tab.viewer.setNightMode(nightMode);
+    if (!isMd) tab.viewer.setReadingMode?.(readingMode);
   }
 
   const name = filePath.split(/[\\/]/).pop();
@@ -162,7 +167,7 @@ async function openFile(filePath) {
 
   await tab.viewer.load(filePath);
 
-  // Auto-switch reading mode: ON for EPUB, OFF for PDF
+  // Auto-switch reading mode: ON for EPUB, OFF for PDF/MD
   if (isEpub && !readingMode) setReadingMode(true);
   else if (!isEpub && readingMode) setReadingMode(false);
 
@@ -200,14 +205,15 @@ function updateUI() {
   if (document.activeElement !== zoomInputEl)
     zoomInputEl.value = on ? `${Math.round(v.zoom * 100)}%` : '100%';
 
+  const isMd = v?.isMd === true;
   prevBtn.disabled    = !on || (isEpub ? v._atStart : v.currentPage <= 1);
   nextBtn.disabled    = !on || (isEpub ? v._atEnd   : v.currentPage >= total);
   zoomInBtn.disabled  = !on;
   zoomOutBtn.disabled = !on;
   zoomFitBtn.disabled = !on;
-  // Signature is PDF-only; highlight works for both PDF and EPUB
-  hlBtn.disabled   = !on;
-  signBtn.disabled = !on || isEpub;
+  // Signature is PDF-only; highlight works for PDF and EPUB (not MD)
+  hlBtn.disabled   = !on || isMd;
+  signBtn.disabled = !on || isEpub || isMd;
   // TTS is EPUB-only
   document.getElementById('tts-btn').disabled = !on || !isEpub;
 }
@@ -964,7 +970,8 @@ document.addEventListener('drop', async (e) => {
   const file = e.dataTransfer.files[0];
   if (!file) return;
   const name = file.name.toLowerCase();
-  if (name.endsWith('.pdf') || name.endsWith('.epub')) await openFile(file.path);
+  if (name.endsWith('.pdf') || name.endsWith('.epub') || name.endsWith('.md') || name.endsWith('.markdown'))
+    await openFile(file.path);
 });
 
 // ── IPC from Menu ──────────────────────────────────────────────────────────

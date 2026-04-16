@@ -104,9 +104,10 @@ function createWindow() {
           click: async () => {
             const result = await dialog.showOpenDialog(mainWindow, {
               filters: [
-                { name: 'PDF / EPUB 文件', extensions: ['pdf', 'epub'] },
-                { name: 'PDF 文件',        extensions: ['pdf'] },
-                { name: 'EPUB 文件',       extensions: ['epub'] },
+                { name: 'PDF / EPUB / Markdown', extensions: ['pdf', 'epub', 'md', 'markdown'] },
+                { name: 'PDF 文件',              extensions: ['pdf'] },
+                { name: 'EPUB 文件',             extensions: ['epub'] },
+                { name: 'Markdown 文件',         extensions: ['md', 'markdown'] },
               ],
               properties: ['openFile'],
             });
@@ -163,9 +164,10 @@ app.on('before-quit', () => { forceQuit = true; });
 ipcMain.handle('dialog:openFile', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     filters: [
-      { name: 'PDF / EPUB 文件', extensions: ['pdf', 'epub'] },
-      { name: 'PDF 文件',        extensions: ['pdf'] },
-      { name: 'EPUB 文件',       extensions: ['epub'] },
+      { name: 'PDF / EPUB / Markdown', extensions: ['pdf', 'epub', 'md', 'markdown'] },
+      { name: 'PDF 文件',              extensions: ['pdf'] },
+      { name: 'EPUB 文件',             extensions: ['epub'] },
+      { name: 'Markdown 文件',         extensions: ['md', 'markdown'] },
     ],
     properties: ['openFile'],
   });

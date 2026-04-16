@@ -42,7 +42,7 @@ export class PDFViewer {
     this.dropHint.className = 'drop-hint';
     this.dropHint.innerHTML = `
       <div class="drop-icon">📄</div>
-      <p>拖入 PDF / EPUB 文件，或点击"打开"</p>
+      <p>拖入 PDF / EPUB / Markdown 文件，或点击"打开"</p>
       <small>Ctrl+O · Ctrl+T 新标签页</small>`;
     this._recentEl = document.createElement('div');
     this._recentEl.className = 'recent-list';
