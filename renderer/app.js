@@ -154,7 +154,7 @@ async function openFile(filePath) {
     else           tab.viewer = new PDFViewer();
     bindViewerCallbacks(tab.viewer);
     tab.container.appendChild(tab.viewer.el);
-    if (!isMd && nightMode) tab.viewer.setNightMode(nightMode);
+    if (nightMode) tab.viewer.setNightMode(nightMode);
     if (!isMd) tab.viewer.setReadingMode?.(readingMode);
   }
 
@@ -809,8 +809,8 @@ function toggleNightMode() {
   nightMode = !nightMode;
   document.body.classList.toggle('night-mode', nightMode);
   document.getElementById('night-btn').classList.toggle('active', nightMode);
-  // Apply night theme to all open EPUB tabs
-  tabs.forEach(t => { if (t.viewer.isEpub) t.viewer.setNightMode(nightMode); });
+  // Apply night theme to all open EPUB / MD tabs
+  tabs.forEach(t => { if (t.viewer.isEpub || t.viewer.isMd) t.viewer.setNightMode(nightMode); });
 }
 
 // ── Highlight Color Picker ─────────────────────────────────────────────────

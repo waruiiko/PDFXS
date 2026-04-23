@@ -896,34 +896,35 @@ body.night-mode .hl-layer rect {
 .md-scroll {
   flex: 1;
   overflow-y: auto;
-  background: #1e1e1e;
+  background: #ffffff;
 }
 
 .md-preview {
   max-width: 800px;
   margin: 0 auto;
   padding: 36px 48px;
-  color: #d4d4d4;
+  color: #1e1e1e;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
   font-size: 100%;
   line-height: 1.75;
 }
 
+/* ── Light mode (default) ─────────────────────────────────────────────────── */
 .md-preview h1, .md-preview h2, .md-preview h3,
 .md-preview h4, .md-preview h5, .md-preview h6 {
-  color: #e8e8e8;
+  color: #111;
   margin: 1.4em 0 0.5em;
   line-height: 1.35;
   font-weight: 600;
 }
-.md-preview h1 { font-size: 1.9em; border-bottom: 1px solid #333; padding-bottom: 0.25em; }
-.md-preview h2 { font-size: 1.45em; border-bottom: 1px solid #2a2a2a; padding-bottom: 0.2em; }
+.md-preview h1 { font-size: 1.9em; border-bottom: 1px solid #ddd; padding-bottom: 0.25em; }
+.md-preview h2 { font-size: 1.45em; border-bottom: 1px solid #eee; padding-bottom: 0.2em; }
 .md-preview h3 { font-size: 1.2em; }
 .md-preview h4 { font-size: 1.05em; }
 
 .md-preview p  { margin: 0.6em 0; }
 
-.md-preview a  { color: #6aa3e0; text-decoration: none; }
+.md-preview a  { color: #2470c7; text-decoration: none; }
 .md-preview a:hover { text-decoration: underline; }
 
 .md-preview ul, .md-preview ol { padding-left: 1.8em; margin: 0.4em 0; }
@@ -932,25 +933,25 @@ body.night-mode .hl-layer rect {
 .md-preview blockquote {
   margin: 0.8em 0;
   padding: 0.4em 1em;
-  border-left: 3px solid #555;
-  color: #999;
-  background: #252525;
+  border-left: 3px solid #ccc;
+  color: #666;
+  background: #f6f6f6;
   border-radius: 0 4px 4px 0;
 }
 
 .md-preview code {
   font-family: 'Cascadia Code', 'Consolas', monospace;
   font-size: 0.88em;
-  background: #2a2a2a;
-  border: 1px solid #383838;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
   border-radius: 3px;
   padding: 0.1em 0.4em;
-  color: #ce9178;
+  color: #c7254e;
 }
 
 .md-preview pre {
-  background: #252525;
-  border: 1px solid #333;
+  background: #f6f6f6;
+  border: 1px solid #e0e0e0;
   border-radius: 6px;
   padding: 1em 1.2em;
   overflow-x: auto;
@@ -960,7 +961,7 @@ body.night-mode .hl-layer rect {
   background: none;
   border: none;
   padding: 0;
-  color: #d4d4d4;
+  color: #333;
   font-size: 0.9em;
 }
 
@@ -971,23 +972,38 @@ body.night-mode .hl-layer rect {
   font-size: 0.94em;
 }
 .md-preview th, .md-preview td {
-  border: 1px solid #383838;
+  border: 1px solid #ddd;
   padding: 6px 12px;
   text-align: left;
 }
-.md-preview th { background: #2a2a2a; color: #e8e8e8; font-weight: 600; }
-.md-preview tr:nth-child(even) td { background: #222; }
+.md-preview th { background: #f0f0f0; color: #111; font-weight: 600; }
+.md-preview tr:nth-child(even) td { background: #fafafa; }
 
 .md-preview hr {
   border: none;
-  border-top: 1px solid #333;
+  border-top: 1px solid #e0e0e0;
   margin: 1.5em 0;
 }
 
 .md-preview img { max-width: 100%; border-radius: 4px; }
 
-/* Night mode: slightly warmer background */
-.md-preview.night { background: #161616; color: #c8c8c8; }
+/* ── Night mode ───────────────────────────────────────────────────────────── */
+.md-preview.night { background: #1e1e1e; color: #d4d4d4; }
+.md-scroll:has(.md-preview.night) { background: #1e1e1e; }
+
+.md-preview.night h1, .md-preview.night h2, .md-preview.night h3,
+.md-preview.night h4, .md-preview.night h5, .md-preview.night h6 { color: #e8e8e8; }
+.md-preview.night h1 { border-bottom-color: #333; }
+.md-preview.night h2 { border-bottom-color: #2a2a2a; }
+.md-preview.night a  { color: #6aa3e0; }
+.md-preview.night blockquote { border-left-color: #555; color: #999; background: #252525; }
+.md-preview.night code { background: #2a2a2a; border-color: #383838; color: #ce9178; }
+.md-preview.night pre  { background: #252525; border-color: #333; }
+.md-preview.night pre code { color: #d4d4d4; }
+.md-preview.night th  { background: #2a2a2a; color: #e8e8e8; }
+.md-preview.night td  { border-color: #383838; }
+.md-preview.night tr:nth-child(even) td { background: #222; }
+.md-preview.night hr  { border-top-color: #333; }
 
 /* ── Scrollbar ────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar          { width: 8px; height: 8px; }

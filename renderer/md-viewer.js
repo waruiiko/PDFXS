@@ -107,7 +107,10 @@ export class MDViewer {
 
   // ── Night mode ────────────────────────────────────────────────────────────
 
-  setNightMode(on) { this._preview.classList.toggle('night', on); }
+  setNightMode(on) {
+    this._preview.classList.toggle('night', on);
+    this._scrollEl.style.background = on ? '#1e1e1e' : '';
+  }
 
   // ── Compatibility stubs ───────────────────────────────────────────────────
 
